@@ -1,6 +1,7 @@
 """ ArgumentEffects computes write effect on arguments. """
 
 from pythran.analyses.aliases import Aliases
+from pythran.analyses.intrinsics import Intrinsics
 from pythran.analyses.global_declarations import GlobalDeclarations
 from pythran.passmanager import ModuleAnalysis
 from pythran.tables import MODULES
@@ -43,7 +44,6 @@ def save_function_effect(module):
             if isinstance(intr, intrinsic.Class):
                 save_function_effect(intr.fields)
 
-
 for module in MODULES.values():
     save_function_effect(module)
 
@@ -53,11 +53,12 @@ class ArgumentEffects(ModuleAnalysis):
     """Gathers inter-procedural effects on function arguments."""
 
     def __init__(self):
+        # There's an edge between src and dest if a parameter of dest is
+        # modified by src
         self.result = DiGraph()
-        self.node_to_functioneffect = IntrinsicArgumentEffects.copy()
-        for fe in IntrinsicArgumentEffects.values():
-            self.result.add_node(fe)
-        super(ArgumentEffects, self).__init__(Aliases, GlobalDeclarations)
+        self.node_to_functioneffect = {}
+        super(ArgumentEffects, self).__init__(Aliases, GlobalDeclarations,
+                                              Intrinsics)
 
     def prepare(self, node):
         """
@@ -67,6 +68,11 @@ class ArgumentEffects(ModuleAnalysis):
         user defined functions.
         """
         super(ArgumentEffects, self).prepare(node)
+        for i in self.intrinsics:
+            fe = IntrinsicArgumentEffects[i]
+            self.node_to_functioneffect[i] = fe
+            self.result.add_node(fe)
+
         for n in self.global_declarations.values():
             fe = FunctionEffects(n)
             self.node_to_functioneffect[n] = fe
@@ -81,8 +87,8 @@ class ArgumentEffects(ModuleAnalysis):
                 update_effect_idx, update_effect = ue
                 if not update_effect:
                     continue
-                for pred in result.predecessors(function):
-                    edge = result.edges[pred, function]
+                for pred in result.successors(function):
+                    edge = result.edges[function, pred]
                     for fp in enumerate(edge["formal_parameters"]):
                         i, formal_parameter_idx = fp
                         # propagate the impurity backward if needed.
@@ -92,7 +98,6 @@ class ArgumentEffects(ModuleAnalysis):
                            not pred.update_effects[ith_effectiv]):
                             pred.update_effects[ith_effectiv] = True
                             candidates.add(pred)
-
         self.result = {f.func: f.update_effects for f in result}
         return self.result
 
@@ -166,6 +171,7 @@ class ArgumentEffects(ModuleAnalysis):
                         func_alias = self.global_declarations[bound_name]
                     if func_alias is intrinsic.UnboundValue:
                         continue
+
                     if func_alias not in self.node_to_functioneffect:
                         continue
 
@@ -179,14 +185,14 @@ class ArgumentEffects(ModuleAnalysis):
                                 fe)
                     else:
                         fe = self.node_to_functioneffect[func_alias]
-                    predecessors = self.result.predecessors(fe)
-                    if self.current_function not in predecessors:
+
+                    if not self.result.has_edge(fe, self.current_function):
                         self.result.add_edge(
-                            self.current_function,
                             fe,
+                            self.current_function,
                             effective_parameters=[],
                             formal_parameters=[])
-                    edge = self.result.edges[self.current_function, fe]
+                    edge = self.result.edges[fe, self.current_function]
                     edge["effective_parameters"].append(n)
                     edge["formal_parameters"].append(i)
         self.generic_visit(node)

@@ -17,11 +17,11 @@ from pythran.openmp import OMPDirective
 from pythran.passmanager import Backend
 from pythran.syntax import PythranSyntaxError
 from pythran.tables import operator_to_lambda, update_operator_to_lambda
-from pythran.tables import pythran_ward
+from pythran.tables import pythran_ward, attributes as attributes_table
 from pythran.types.conversion import PYTYPE_TO_CTYPE_TABLE, TYPE_TO_SUFFIX
 from pythran.types.types import Types
 from pythran.utils import attr_to_path, pushpop, cxxid, isstr, isnum
-from pythran.utils import isextslice, ispowi
+from pythran.utils import isextslice, ispowi, quote_cxxstring
 from pythran import metadata, unparse
 
 from math import isnan, isinf
@@ -678,8 +678,10 @@ class CxxFunction(ast.NodeVisitor):
         for stmt in node.body:
             is_assigned.update({n.id for n in self.gather(IsAssigned, stmt)})
 
-        nodes = ASTMatcher(pattern_range).search(node.iter)
-        if node.iter not in nodes or node.target.id in is_assigned:
+        match = ASTMatcher(pattern_range).match(node.iter)
+        if not match:
+            return False
+        if node.target.id in is_assigned:
             return False
 
         args = node.iter.args
@@ -948,10 +950,15 @@ class CxxFunction(ast.NodeVisitor):
         func = self.visit(node.func)
         # special hook for getattr, as we cannot represent it in C++
         if func == 'pythonic::builtins::functor::getattr{}':
-            result = ('pythonic::builtins::getattr({}{{}}, {})'
-                    .format('pythonic::types::attr::'
-                            + node.args[1].value.upper(),
-                            args[0]))
+            attrname = node.args[1].value
+            fmt = 'pythonic::builtins::getattr({}{{}}, {})'
+            attr = 'pythonic::types::attr::' + attrname.upper()
+            if attributes_table[attrname][1].isstatic() and node in self.immediates:
+                # ugly hack to ensure constexprness of the call
+                scall = fmt.format(attr, '*(decltype(&{}))nullptr'.format(args[0]))
+                result = 'std::integral_constant<long, {0}>()'.format(scall)
+            else:
+                result = fmt.format(attr, args[0])
         else:
             result = "{}({})".format(func, ", ".join(args))
 
@@ -968,7 +975,7 @@ class CxxFunction(ast.NodeVisitor):
         elif isinstance(node.value, bool):
             ret = str(node.value).lower()
         elif isinstance(node.value, str):
-            quoted = node.value.replace('"', r'\"').replace('\n', r'\n')
+            quoted = quote_cxxstring(node.value)
             if len(node.value) == 1:
                 quoted = quoted.replace("'", r"\'")
                 ret = 'pythonic::types::chr(\'' + quoted + '\')'

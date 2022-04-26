@@ -231,6 +231,7 @@ namespace types
   struct string_iterator : std::iterator<std::random_access_iterator_tag, str,
                                          std::ptrdiff_t, str *, str> {
     std::string::const_iterator curr;
+    string_iterator() = default;
     string_iterator(std::string::const_iterator iter) : curr(iter)
     {
     }
@@ -318,6 +319,11 @@ namespace types
 
   std::ostream &operator<<(std::ostream &os, chr const &s);
   std::ostream &operator<<(std::ostream &os, str const &s);
+
+  str operator*(str const &s, long n);
+  str operator*(long t, str const &s);
+  str operator*(chr const &s, long n);
+  str operator*(long t, chr const &s);
 }
 
 namespace operator_
@@ -355,11 +361,6 @@ struct assignable<char const[N]> {
   using type = types::str;
 };
 PYTHONIC_NS_END
-
-pythonic::types::str operator*(pythonic::types::str const &s, long n);
-pythonic::types::str operator*(long t, pythonic::types::str const &s);
-pythonic::types::str operator*(pythonic::types::chr const &s, long n);
-pythonic::types::str operator*(long t, pythonic::types::chr const &s);
 
 namespace std
 {

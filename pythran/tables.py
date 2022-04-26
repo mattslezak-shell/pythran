@@ -14,7 +14,8 @@ from pythran.intrinsic import Class
 from pythran.intrinsic import ClassWithConstConstructor, ExceptionClass
 from pythran.intrinsic import ClassWithReadOnceConstructor
 from pythran.intrinsic import ConstFunctionIntr, FunctionIntr, UpdateEffect
-from pythran.intrinsic import ConstMethodIntr, MethodIntr, AttributeIntr
+from pythran.intrinsic import ConstMethodIntr, MethodIntr
+from pythran.intrinsic import AttributeIntr, StaticAttributeIntr
 from pythran.intrinsic import ReadEffect, ConstantIntr, UFunc
 from pythran.intrinsic import ReadOnceMethodIntr
 from pythran.intrinsic import ReadOnceFunctionIntr, ConstExceptionIntr
@@ -719,13 +720,13 @@ CLASSES = {
                     complex],
             ]
         ),
-        "itemsize": AttributeIntr(signature=Fun[[NDArray[T0, :]], int],
+        "itemsize": StaticAttributeIntr(signature=Fun[[NDArray[T0, :]], int],
                                   return_range=interval.positive_values),
         "nbytes": AttributeIntr(
             signature=Fun[[NDArray[T0, :]], int],
             return_range=interval.positive_values
         ),
-        "ndim": AttributeIntr(signature=Fun[[NDArray[T0, :]], int],
+        "ndim": StaticAttributeIntr(signature=Fun[[NDArray[T0, :]], int],
                               return_range=interval.positive_values),
         "reshape": ConstMethodIntr(
             signature=Union[
@@ -2164,12 +2165,7 @@ def partialsum(seq):
 
 
 _operator_add_signature = Union[
-    _numpy_binary_op_signature.__args__ +
-    (Fun[[str, str], str],
-     Fun[[List[T0], List[T0]], List[T0]],) +
-    tuple(Fun[[Tuple[t0], Tuple[t1]], Tuple[t0 + t1]]
-          for t0 in partialsum([T0, T1, T2, T3])
-          for t1 in partialsum([T4, T5, T6, T7]))
+    _numpy_binary_op_signature.__args__
 ]
 
 _operator_eq_signature = Union[
@@ -4258,6 +4254,7 @@ MODULES = {
                 Fun[[Iterable[T0]], Generator[List[T0]]],
                 Fun[[Iterable[T0], int], Generator[List[T0]]],
             ],
+            immediate_arguments=[1],
         ),
         "repeat": ConstFunctionIntr(
             signature=Union[
@@ -4362,8 +4359,8 @@ MODULES = {
         "is_not": ConstFunctionIntr(),
         "abs": ConstFunctionIntr(),
         "__abs__": ConstFunctionIntr(),
-        "add": ConstFunctionIntr(signature=_operator_add_signature),
-        "__add__": ConstFunctionIntr(signature=_operator_add_signature),
+        "add": ConstFunctionIntr(signature=_numpy_binary_op_signature),
+        "__add__": ConstFunctionIntr(signature=_numpy_binary_op_signature),
         "and_": ConstFunctionIntr(),
         "__and__": ConstFunctionIntr(),
         "floordiv": ConstFunctionIntr(signature=_numpy_binary_op_signature),

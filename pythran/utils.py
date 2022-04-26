@@ -47,7 +47,8 @@ def attr_to_path(node):
             module, path = get_intrinsic_path(modules, attr.value)
             return module[attr.attr], path + (attr.attr,)
     obj, path = get_intrinsic_path(MODULES, node)
-    if not obj.isliteral():
+    # hasattr check because `obj` can be a dict (for modules)
+    if hasattr(obj, 'isliteral') and not obj.isliteral():
         path = path[:-1] + ('functor', path[-1])
     return obj, ('pythonic', ) + path
 
@@ -132,6 +133,18 @@ def pythran_builtin_attr(name):
 def cxxid(name):
     from pythran.tables import cxx_keywords
     return name + '_' * (name in cxx_keywords)
+
+
+def quote_cxxstring(s):
+    subs = (('\\', '\\\\'),
+            ('\n', '\\n'),
+            ('\r', '\\r'),
+            ('"', '\\"'),
+           )
+    quoted = s
+    for f, t in subs:
+        quoted = quoted.replace(f, t)
+    return quoted
 
 
 @contextmanager

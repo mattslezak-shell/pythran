@@ -1,5 +1,8 @@
-""" Immediates gathers immediates. For now, only integers within shape are
-considered as immediates """
+"""
+Immediates gathers immediates. For now, only integers within shape are
+and argument of functions flagged as immediate_arguments are
+considered as immediates
+"""
 
 import gast as ast
 from pythran.tables import MODULES
@@ -21,8 +24,7 @@ class Immediates(NodeAnalysis):
             if getattr(alias, "immediate_arguments", []):
                 for i, arg in enumerate(node.args):
                     if i in alias.immediate_arguments:
-                        if isinstance(arg, ast.Constant):
-                            self.result.add(arg)
+                        self.result.add(arg)
 
         if len(func_aliases) == 1 and next(iter(func_aliases)) is _make_shape:
             self.result.update(a for a in node.args

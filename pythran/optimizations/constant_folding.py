@@ -58,6 +58,7 @@ class ConstantFolding(Transformation):
         dummy_module = ast.Module([s for s in node.body
                                    if not isinstance(s, ast.Import)],
                                   [])
+        ast.fix_missing_locations(dummy_module)
         eval(compile(ast.gast_to_ast(dummy_module),
                      '<constant_folding>', 'exec'),
              self.env)
@@ -72,6 +73,12 @@ class ConstantFolding(Transformation):
     visit_List = visit_Set = Transformation.generic_visit
     visit_Dict = visit_Tuple = Transformation.generic_visit
 
+    def visit_Call(self, node):
+        if isinstance(node.func, ast.Attribute):
+            return self.generic_visit(node)
+        else:
+            return Transformation.generic_visit(self, node)
+
     def generic_visit(self, node):
         if isinstance(node, ast.expr) and node in self.constant_expressions:
             fake_node = ast.Expression(node)
@@ -80,23 +87,20 @@ class ConstantFolding(Transformation):
             try:
                 value = eval(code, self.env)
                 new_node = to_ast(value)
-                try:
-                    if not ASTMatcher(node).search(new_node):
-                        self.update = True
-                        return new_node
-                except DamnTooLongPattern as e:
-                    print("W: ", e, " Assume no update happened.")
-                return Transformation.generic_visit(self, node)
+                if not ASTMatcher(node).match(new_node):
+                    self.update = True
+                    return new_node
+            except DamnTooLongPattern as e:
+                print("W: ", e, " Assume no update happened.")
             except ConversionError as e:
                 print('error in constant folding: ', e)
                 raise
             except ToNotEval:
-                return Transformation.generic_visit(self, node)
+                pass
             except AttributeError as e:
                 # this may miss a few optimization
                 logger.info('During constant folding, bailing out due to: ' +
                             e.args[0])
-                return Transformation.generic_visit(self, node)
             except NameError as e:
                 # FIXME dispatched function are not processed by constant
                 # folding
@@ -105,11 +109,10 @@ class ConstantFolding(Transformation):
                 # this may miss a few optimization
                 logger.info('During constant folding, bailing out due to: ' +
                             e.args[0])
-                return Transformation.generic_visit(self, node)
             except Exception as e:
                 raise PythranSyntaxError(str(e), node)
-        else:
-            return Transformation.generic_visit(self, node)
+
+        return Transformation.generic_visit(self, node)
 
 
 class PartialConstantFolding(Transformation):
